@@ -7,10 +7,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 def _merge(arr: np.ndarray, left: int, mid: int, right: int) -> None:
     # Fusiona arr[left:mid] y arr[mid:right] en su lugar
-    l_part = arr[left:mid].copy()
-    r_part = arr[mid:right].copy()
+    l_part = arr[left:mid].copy() #copia el lado izquierdo
+    r_part = arr[mid:right].copy() # copia el lado derecho
 
     l_idx, r_idx, k = 0, 0, left
+
+    # Hace una mezcla intercalada tomando el menor de cada lado
     while l_idx < len(l_part) and r_idx < len(r_part):
         if l_part[l_idx] <= r_part[r_idx]:
             arr[k] = l_part[l_idx]; l_idx += 1
@@ -20,9 +22,14 @@ def _merge(arr: np.ndarray, left: int, mid: int, right: int) -> None:
 
     # Vaciar lo que sobró en cada lado
     while l_idx < len(l_part):
-        arr[k] = l_part[l_idx]; l_idx += 1; k += 1
+        arr[k] = l_part[l_idx]; 
+        l_idx += 1; 
+        k += 1
+        
     while r_idx < len(r_part):
-        arr[k] = r_part[r_idx]; r_idx += 1; k += 1
+        arr[k] = r_part[r_idx]; 
+        r_idx += 1; 
+        k += 1
 
 
 def mergesort_sequential(arr: np.ndarray) -> np.ndarray:
@@ -36,9 +43,9 @@ def mergesort_sequential(arr: np.ndarray) -> np.ndarray:
     while width < n:
         for i in range(0, n, 2 * width):
             left  = i
-            mid   = min(i + width,     n)
-            right = min(i + 2 * width, n)
-            if mid < right:
+            mid   = min(i + width,     n)  # punto de corte
+            right = min(i + 2 * width, n)  # fin del bloque
+            if mid < right:                # hay dos subarreeglos que mezclar
                 _merge(arr, left, mid, right)
         width *= 2
 
