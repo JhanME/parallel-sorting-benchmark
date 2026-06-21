@@ -1,70 +1,90 @@
 from mpi4py import MPI
 import numpy as np
-import sys
 import os
+import sys
 
-# Agregar la raíz del proyecto al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src.sequential.quicksort import quicksort_sequential
+
+
+def _split_counts(n: int, workers: int) -> tuple[np.ndarray, np.ndarray]:
+    counts = np.full(workers, n // workers, dtype=np.int32)
+    counts[: n % workers] += 1
+    displacements = np.zeros(workers, dtype=np.int32)
+    displacements[1:] = np.cumsum(counts[:-1])
+    return counts, displacements
+
+
+def _merge_sorted(left: np.ndarray, right: np.ndarray) -> np.ndarray:
+    result = np.empty(len(left) + len(right), dtype=left.dtype)
+    i = j = k = 0
+
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            result[k] = left[i]
+            i += 1
+        else:
+            result[k] = right[j]
+            j += 1
+        k += 1
+
+    if i < len(left):
+        result[k:] = left[i:]
+    elif j < len(right):
+        result[k:] = right[j:]
+
+    return result
+
 
 def quicksort_mpi(data=None):
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
 
-    # 1. Distribuir datos
-    n = None
     if rank == 0:
+        if data is None:
+            data = np.empty(0, dtype=np.float32)
+        data = np.asarray(data, dtype=np.float32)
         n = len(data)
+    else:
+        data = None
+        n = None
+
     n = comm.bcast(n, root=0)
+    counts, displacements = _split_counts(n, size)
+    local_data = np.empty(counts[rank], dtype=np.float32)
 
-    local_n = n // size
-    local_data = np.empty(local_n, dtype=np.float32)
+    comm.Scatterv([data, counts, displacements, MPI.FLOAT], local_data, root=0)
 
-    comm.Scatter(data, local_data, root=0)
-
-    # 2. Ordenar localmente usando el QuickSort secuencial que implementamos
     local_data = quicksort_sequential(local_data)
+    all_sorted = comm.gather(local_data, root=0)
 
-    # 3. Reunir y mezclar (GATHER + SORT en Rank 0 es la forma más simple de MPI QuickSort)
-    # Aunque no es lo más "distribuido", es común para fines académicos básicos.
-    # Una versión más avanzada sería Hypercube QuickSort.
-    
-    all_sorted = None
-    if rank == 0:
-        all_sorted = np.empty(n, dtype=np.float32)
-    
-    comm.Gather(local_data, all_sorted, root=0)
-    
-    if rank == 0:
-        # El Gather nos da [pedazo1_ordenado, pedazo2_ordenado, ...]
-        # Solo falta mezclar estos pedazos. Para simplicidad, usamos np.sort
-        # que es muy eficiente en el Merge final.
-        all_sorted.sort()
-        return all_sorted
-    return None
+    if rank != 0:
+        return None
+
+    result = np.empty(0, dtype=np.float32)
+    for chunk in all_sorted:
+        result = _merge_sorted(result, chunk)
+    return result
+
 
 if __name__ == "__main__":
-    from src.common.utils import generate_random_array, check_sorted, get_timer
+    from src.common.utils import check_sorted, generate_random_array, get_timer
+
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
-    
-    size_arg = 1000
-    if len(sys.argv) > 1:
-        size_arg = int(sys.argv[1])
-    
-    data = None
-    if rank == 0:
-        data = generate_random_array(size_arg)
-    
+    size_arg = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
+
+    data = generate_random_array(size_arg) if rank == 0 else None
+
+    comm.Barrier()
     start = get_timer()
     sorted_data = quicksort_mpi(data)
-    end = get_timer()
-    
+    comm.Barrier()
+    elapsed = get_timer() - start
+
     if rank == 0:
-        is_sorted = check_sorted(sorted_data)
-        # Solo imprimir el tiempo para que el script de experimentos lo capture
-        print(f"Time: {end - start:.6f}s")
-        if not is_sorted:
+        print(f"Time: {elapsed:.6f}s")
+        if not check_sorted(sorted_data):
             print("Error: Arreglo no ordenado correctamente.")
