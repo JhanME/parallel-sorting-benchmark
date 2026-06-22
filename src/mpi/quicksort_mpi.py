@@ -1,4 +1,9 @@
+from mpi4py import MPI
 import numpy as np
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 def sequential_quick_sort(arr):
     """Implementación secuencial de Quick Sort."""
@@ -54,3 +59,34 @@ def merge_arrays(left, right):
         k += 1
     result[k:] = left[i:] if i < len(left) else right[j:]
     return result
+
+# Para compatibilidad con el resto del benchmark de la estructura final
+def quicksort_mpi(data=None):
+    comm = MPI.COMM_WORLD
+    # Convertir a int32 si es necesario, ya que la implementación del usuario usa np.int32
+    if comm.Get_rank() == 0:
+        if data is None:
+            data = np.empty(0, dtype=np.int32)
+        else:
+            data = np.asarray(data, dtype=np.int32)
+    return mpi_quick_sort(data, comm)
+
+if __name__ == "__main__":
+    from src.common.utils import check_sorted, generate_random_array, get_timer
+
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size_arg = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
+
+    data = generate_random_array(size_arg) if rank == 0 else None
+
+    comm.Barrier()
+    start = get_timer()
+    sorted_data = quicksort_mpi(data)
+    comm.Barrier()
+    elapsed = get_timer() - start
+
+    if rank == 0:
+        print(f"Time: {elapsed:.6f}s")
+        if not check_sorted(sorted_data):
+            print("Error: Arreglo no ordenado correctamente.")
