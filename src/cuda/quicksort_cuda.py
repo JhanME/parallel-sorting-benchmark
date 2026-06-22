@@ -8,10 +8,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from src.common.utils import get_timer, check_sorted, generate_random_array
 
-# ─────────────────────────────────────────────────────────────
 # Kernel 1: Ordena bloques pequeños in-place con Insertion Sort
 # Se usa en la base de la recursión (subarreglos <= THRESHOLD)
-# ─────────────────────────────────────────────────────────────
+
 @cuda.jit
 def insertion_sort_kernel(arr, starts, ends, n_segments):
     """
@@ -35,10 +34,8 @@ def insertion_sort_kernel(arr, starts, ends, n_segments):
         arr[j + 1] = key
 
 
-# ─────────────────────────────────────────────────────────────
 # Kernel 2: Particionamiento paralelo (un bloque por segmento)
 # Aplica el esquema de Lomuto en GPU usando atomic adds.
-# ─────────────────────────────────────────────────────────────
 @cuda.jit
 def partition_kernel(arr, temp, start, end, pivot, left_count, right_count):
     """
@@ -103,11 +100,10 @@ def _gpu_partition(d_arr, d_temp, start, end):
     return pivot_pos
 
 
-# ─────────────────────────────────────────────────────────────
 # Función principal: QuickSort híbrido en GPU
 # - Usa particionamiento paralelo en GPU para segmentos grandes
 # - Cae a Insertion Sort en GPU para segmentos pequeños (≤ THRESHOLD)
-# ─────────────────────────────────────────────────────────────
+
 THRESHOLD = 32   # segmentos <= THRESHOLD se ordenan con Insertion Sort en GPU
 
 def quicksort_gpu(arr: np.ndarray) -> np.ndarray:
