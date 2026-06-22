@@ -8,11 +8,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from src.common.utils import get_timer, check_sorted, generate_random_array
 
-
-# ─────────────────────────────────────────────────────────────
 # Kernel: Fusiona pares de sub-arreglos ordenados en paralelo
 # Cada hilo se encarga de una fusión independiente.
-# ─────────────────────────────────────────────────────────────
+
 @cuda.jit
 def merge_kernel(arr, temp_arr, width, n):
     """
