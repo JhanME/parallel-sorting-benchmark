@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import subprocess
 import time
+import shutil
 
 # Agregar la raíz del proyecto al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,22 +22,43 @@ except ImportError:
     print("Advertencia: No se pudo cargar módulos CUDA. Saltando pruebas de GPU.")
     HAS_CUDA = False
 
+MPI_COMMANDS = [
+    "mpiexec",
+    r"C:\Program Files\Microsoft MPI\Bin\mpiexec.exe",
+    "mpirun",
+]
+
 def run_mpi(script_path, size):
     # Ejecutar MPI y capturar el tiempo
     # Asumimos que el script imprime el tiempo en la última línea con "Time: X.XXXXs"
     # Intentar con mpiexec y mpirun
-    for mpi_cmd in ["mpiexec", "mpirun"]:
-        cmd = [mpi_cmd, "-n", "4", "python", script_path, str(size)]
+    found_mpi = False
+    for mpi_cmd in MPI_COMMANDS:
+        mpi_path = shutil.which(mpi_cmd) or (mpi_cmd if os.path.exists(mpi_cmd) else None)
+        if mpi_path is None:
+            print(f"Advertencia: no se encontro {mpi_cmd} en PATH.")
+            continue
+
+        found_mpi = True
+        cmd = [mpi_path, "-n", "4", sys.executable, os.path.abspath(script_path), str(size)]
+        print("Ejecutando MPI:", " ".join(cmd))
         try:
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
                 for line in result.stdout.splitlines():
                     if "Time:" in line:
                         return float(line.split(":")[1].strip().replace("s", ""))
+                print(f"Advertencia: {mpi_cmd} no devolvio una linea con Time:.")
+                print(result.stdout.strip())
+            else:
+                print(f"Error ejecutando {mpi_cmd}:")
+                print(result.stderr.strip() or result.stdout.strip())
         except FileNotFoundError:
             continue
         except Exception as e:
             print(f"Error ejecutando {mpi_cmd}: {e}")
+    if not found_mpi:
+        print("Error: no se encontro ningun ejecutable MPI. Verifica que mpiexec este en PATH.")
     return 0
 
 def main():
